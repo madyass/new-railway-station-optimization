@@ -100,67 +100,16 @@ def calculate_population_per_station(candidate_stations_df : pd.DataFrame , popu
 def calculate_connectivity_dict(all_stations_pop : pd.DataFrame , MIN_DIST_KM = 1 , MAX_DIST_KM = 3):
     station_list = list(zip(all_stations_pop['station_id'], all_stations_pop['lat'], all_stations_pop['lon']))
 
-    # Bağlantı sözlüğü
     connectivity_dict = defaultdict(list)
 
-    # Her istasyon için diğerlerine olan uzaklıkları kontrol et
     for i, (id1, lat1, lon1) in enumerate(station_list):
         for j in range(i + 1, len(station_list)):
             id2, lat2, lon2 = station_list[j]
             dist = haversine(lat1, lon1, lat2, lon2)
             if MIN_DIST_KM <= dist <= MAX_DIST_KM:
                 connectivity_dict[id1].append(id2)
-                connectivity_dict[id2].append(id1)  # Bağlantı çift yönlü
+                connectivity_dict[id2].append(id1)  
 
-    # İsteğe bağlı: dict'e dönüştür (defaultdict yerine)
     connectivity_dict = dict(connectivity_dict)
 
     return connectivity_dict
-
-
-def visualize_chromosome(chromosome, stations_df):
-    # İstanbul merkezli başlangıç haritası
-    m = folium.Map(location=[41.015137, 28.979530], zoom_start=11)
-
-    # Renk paleti
-    color_palette = [
-        'red', 'blue', 'green', 'purple', 'orange', 'darkred', 'lightred',
-        'beige', 'darkblue', 'darkgreen', 'cadetblue', 'darkpurple', 'white',
-        'pink', 'lightblue', 'lightgreen', 'gray', 'black'
-    ]
-    line_colors = {}
-
-    for i, (line, station_ids) in enumerate(chromosome.items()):
-        color = color_palette[i % len(color_palette)]
-        line_colors[line] = color
-        line_coords = []
-
-        for station_id in station_ids:
-            row = stations_df[stations_df['station_id'] == station_id]
-            if row.empty:
-                continue
-            lat = row.iloc[0]['lat']
-            lon = row.iloc[0]['lon']
-            line_coords.append((lat, lon))
-
-            folium.CircleMarker(
-                location=(lat, lon),
-                radius=4,
-                color=color,
-                fill=True,
-                fill_color=color,
-                fill_opacity=0.8,
-                popup=f"{line}: {station_id}"
-            ).add_to(m)
-
-        # Çizgi olarak hattı çiz
-        if len(line_coords) > 1:
-            folium.PolyLine(
-                line_coords,
-                color=color,
-                weight=3,
-                opacity=0.6,
-                tooltip=line
-            ).add_to(m)
-
-    return m
