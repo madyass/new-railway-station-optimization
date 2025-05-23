@@ -39,7 +39,7 @@ class GeneticMetroPlanner:
         available_candidates = self.candidate_station_ids.copy()
         random.shuffle(available_candidates)
 
-        max_new_stations_per_line = 5  # Her hat için en fazla 5 yeni istasyon
+        max_new_stations_per_line = 5 
 
         for line_name, existing_stations in self.existing_lines_dict.items():
             added_stations = []
@@ -50,14 +50,13 @@ class GeneticMetroPlanner:
                         if (existing_station in self.connectivity_dict and
                             station_id in self.connectivity_dict[existing_station]):
                             added_stations.append(station_id)
-                            break  # Bağlantı bulundu, istasyonu ekle
+                            break  
                 if len(added_stations) == max_new_stations_per_line:
                     break
 
-            # Hat için yeni kromozom: mevcutlar + eklenenler
+
             chromosome[line_name] = existing_stations + added_stations
 
-            # Eklenenleri havuzdan çıkar
             available_candidates = [s for s in available_candidates if s not in added_stations]
 
         return chromosome
