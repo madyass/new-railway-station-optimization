@@ -3,6 +3,7 @@ import math
 import pandas as pd
 from collections import defaultdict
 import folium
+from shapely.geometry import Point 
 
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371 
@@ -77,7 +78,35 @@ def create_grid(lat_min , lon_min , lat_max , lon_max , num_lat_grids = 30 , num
             })
 
     return grid_list , candidate_stations
-            
+
+
+def create_grid_for_polygon(polygon, n = 1000):
+    candidate_stations = []
+
+    index = 1
+
+    # 3. Bounding box sınırları
+    minx, miny, maxx, maxy = polygon.bounds
+
+    # 4. Poligon içine n adet nokta üret
+    while len(candidate_stations) < n:
+        random_points = np.column_stack([
+            np.random.uniform(minx, maxx, n),
+            np.random.uniform(miny, maxy, n)
+        ])
+        for x, y in random_points:
+            if polygon.contains(Point(x, y)):
+                candidate_stations.append({
+                    'station_id' : index,
+                    'lat' : x,
+                    'lon' : y
+                })
+
+                index += 1
+            if len(candidate_stations) >= n:
+                break
+
+    return candidate_stations
 
 def calculate_population_per_station(candidate_stations_df : pd.DataFrame , population_df : pd.DataFrame , k = 1):
     """
@@ -113,3 +142,56 @@ def calculate_connectivity_dict(all_stations_pop : pd.DataFrame , MIN_DIST_KM = 
     connectivity_dict = dict(connectivity_dict)
 
     return connectivity_dict
+
+
+def visualize_chromosome(chromosome, stations_df):
+    m = folium.Map(location=[41.015137, 28.979530], zoom_start=11 , tiles='CartoDB positron')
+
+    color_palette = [
+    '#1f77b4',  # koyu mavi
+    '#ff7f0e',  # turuncu
+    '#2ca02c',  # koyu yeşil
+    '#d62728',  # kırmızı
+    '#9467bd',  # mor
+    '#8c564b',  # kahverengi
+    '#e377c2',  # pembe
+    '#7f7f7f',  # gri
+    '#bcbd22',  # zeytin
+    '#17becf',  # cam göbeği
+    '#393b79',  # lacivert
+    '#637939',  # zeytin yeşili
+    '#8c6d31',  # koyu altın
+    '#843c39',  # bordo
+    '#7b4173',  # koyu pembe
+    '#5254a3',  # orta mavi
+    '#9c9ede'   # açık mor ama yeterince koyu
+                ]
+    line_colors = {}
+
+    for i, (line, station_ids) in enumerate(chromosome.items()):
+        color = color_palette[i % len(color_palette)]
+        line_colors[line] = color
+        line_coords = []
+
+        for station_id in station_ids:
+            row = stations_df[stations_df['station_id'] == station_id]
+            if row.empty:
+                continue
+            lat = row.iloc[0]['lat']
+            lon = row.iloc[0]['lon']
+            line_coords.append((lat, lon))
+
+            folium.CircleMarker(
+                location=(lat, lon),
+                radius=4,
+                color=color,
+                fill=True,
+                fill_color=color,
+                fill_opacity=0.8,
+                popup=f"{line}: {station_id}"
+            ).add_to(m)
+
+        
+
+    return m
+

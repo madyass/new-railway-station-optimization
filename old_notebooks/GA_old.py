@@ -1,7 +1,3 @@
-import numpy as np
-import random
-
-
 class GeneticMetroPlanner:
     """
     all_stations_df : DataFrame which includes all station ids , populations and coordinates
@@ -10,7 +6,7 @@ class GeneticMetroPlanner:
     """
     def __init__(self, all_stations_df, connectivity_dict, existing_lines_dict,
                  mutation_rate = 0.1 , generation_number = 20, child_number = 10,
-                 new_station_number = 30 , max_per_station = 3 , w1 = 1 , w2 = 4 ,random_seed = 44):
+                 new_station_number = 30 , max_per_station = 3):
 
         self.stations_df = all_stations_df
         self.connectivity_dict = connectivity_dict
@@ -22,11 +18,6 @@ class GeneticMetroPlanner:
 
         self.new_station_number = new_station_number
         self.max_per_station = max_per_station
-
-        self.w1 = w1
-        self.w2 = w2
-
-        self.random_seed = random_seed
 
         self.candidate_station_ids = all_stations_df[
             all_stations_df['TYPE'] == 'candidate'
@@ -71,7 +62,7 @@ class GeneticMetroPlanner:
     
             chromosome[line_name] = current_line
     
-        return chromosome 
+        return chromosome
 
 
     def generate_initial_population(self):
@@ -98,51 +89,14 @@ class GeneticMetroPlanner:
         
         return total_population
 
-    def calculate_cost_per_chromosome(self , chromosome):
-        """
-        calculate total cost for a chromosome (number of stations which are added)
-        """
-
-        total_cost = 0
-        used_station_ids = set()
-        existing_ids = {s for lst in self.existing_lines_dict.values() for s in lst}
-        
-        for line_stations in chromosome.values():
-            for station_id in line_stations:
-                if station_id not in used_station_ids and station_id not in existing_ids:
-                    total_cost += 1
-        
-        return total_cost
-        
-    
     def fitness_population(self):
         """
-        Calculate fitness by first normalizing population and cost separately,
-        then combining them with weights w1 and w2.
+        calculate fitness values for each chromosome
         """
-        # Calculate raw populations and costs for all chromosomes
-        raw_populations = [self.calculate_population_for_chromosome(chrom) for chrom in self.population]
-        raw_costs = [self.calculate_cost_per_chromosome(chrom) for chrom in self.population]
-    
-        # Normalize population (higher is better)
-        min_pop, max_pop = min(raw_populations), max(raw_populations)
-        if max_pop == min_pop:
-            norm_pops = [1.0 for _ in raw_populations]
-        else:
-            norm_pops = [(p - min_pop) / (max_pop - min_pop) for p in raw_populations]
-    
-        # Normalize cost (lower is better, so we invert the normalization)
-        min_cost, max_cost = min(raw_costs), max(raw_costs)
-        if max_cost == min_cost:
-            norm_costs = [1.0 for _ in raw_costs]
-        else:
-            norm_costs = [1 - (c - min_cost) / (max_cost - min_cost) for c in raw_costs]  # Inverted
-    
-        # Calculate final fitness: weighted sum of normalized values
-        self.fitness_values = [
-            self.w1 * norm_pop + self.w2 * norm_cost
-            for norm_pop, norm_cost in zip(norm_pops, norm_costs)
-        ]
+        self.fitness_values = [] 
+        for chrom in self.population:
+            temp = self.calculate_population_for_chromosome(chrom)
+            self.fitness_values.append(temp)
 
     def best_result(self):
         """
@@ -208,7 +162,6 @@ class GeneticMetroPlanner:
 
     def run(self):
 
-        random.seed(self.random_seed)
         #initial generation
         self.generate_initial_population()
 
