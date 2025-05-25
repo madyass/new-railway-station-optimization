@@ -229,11 +229,19 @@ class GeneticMetroPlanner:
         M1 from parent1 , M2 from parent1 , M3 from parent2 , M4 from parent1
         """
         child = {}
-        for line_name in self.existing_lines_dict:
-            if random.random() < 0.5:
-                child[line_name] = parent1[line_name]
-            else:
-                child[line_name] = parent2[line_name]
+        all_line_names = set(parent1.keys()) | set(parent2.keys())
+
+        for line_name in all_line_names:
+            if line_name in parent1 and parent2:
+                if random.random() < 0.5:
+                    child[line_name] = parent1[line_name].copy()
+                else:
+                    child[line_name] = parent2[line_name].copy()
+            elif line_name in parent1 and random.random() < 0.8:
+                child[line_name] = parent1[line_name].copy()
+            elif random.random() < 0.8:
+                child[line_name] = parent2[line_name].copy()
+            
         return child
 
     def mutate(self, chromosome):
