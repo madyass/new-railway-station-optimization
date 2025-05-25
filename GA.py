@@ -12,7 +12,7 @@ class GeneticMetroPlanner:
     w3 : tunable weight for the number of transfer 
     """
     def __init__(self, all_stations_df, connectivity_dict, existing_lines_dict,
-                 mutation_rate = 0.1 , generation_number = 20, child_number = 10,
+                 mutation_rate = 0.1 , mutation_line_rate = 0.1 , generation_number = 20, child_number = 10,
                  new_station_number = 30 , max_per_station = 3 ,random_seed = 44 ,
                  w1 = 1 , w2 = 4 , w3 = 1):
 
@@ -21,6 +21,7 @@ class GeneticMetroPlanner:
         self.existing_lines_dict = existing_lines_dict
 
         self.mutation_rate = mutation_rate
+        self.mutation_line_rate = mutation_line_rate
         self.generation_number = generation_number
         self.child_number = child_number
 
@@ -32,6 +33,8 @@ class GeneticMetroPlanner:
         self.w3 = w3
 
         self.random_seed = random_seed
+
+        self.line_count = 12
 
         self.candidate_station_ids = all_stations_df[
             all_stations_df['TYPE'] == 'candidate'
@@ -253,7 +256,31 @@ class GeneticMetroPlanner:
     
                 elif mutation_type == "remove" and len(current_line) > len(self.existing_lines_dict[line_name]): #check removing is valid
                     chromosome[line_name] = current_line[:-1]
-        
+            
+        if random.random() < self.mutation_line_rate:
+
+            candidate_line_name = random.choice(list(chromosome.keys()))
+            candidate_station = random.choice(chromosome[candidate_line_name])
+
+            self.line_count += 1
+            new_line_name = f"M{self.line_count}"
+
+            neighbors = self.connectivity_dict.get(candidate_station , [])
+            valid = [s for s in neighbors if s in self.candidate_station_ids]
+
+            if valid:
+                chromosome[new_line_name] = [candidate_station]
+
+                for _ in range(random.randint(3,5)):
+                    last = chromosome[new_line_name][-1]
+                    neighbors = self.connectivity_dict.get(last , [])
+                    valid = [s for s in neighbors if s in self.candidate_station_ids and s not in chromosome[new_line_name]]
+
+                    if valid:
+                        chromosome[new_line_name].append(random.choice(valid))
+                    else:
+                        break
+
         return chromosome
 
     def run(self):
