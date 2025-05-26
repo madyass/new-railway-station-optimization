@@ -219,13 +219,13 @@ class GeneticMetroPlanner:
 
         initial_stations = set()
 
-        for line_name , line in self.existing_lines_dict:
+        for line_name , line in self.existing_lines_dict.items():
             for station in line:
                 if station not in initial_stations:
                     initial_stations.add(station)
         
         final_stations = set()
-        for line_name , line in self.best_chromosome:
+        for line_name , line in self.best_chromosome.items():
             for station in line:
                 if station not in final_stations:
                     final_stations.add(station)        
@@ -235,6 +235,7 @@ class GeneticMetroPlanner:
         print(f"The number of transfer stations : {self.best_final_result['transfer']}")
         print(f"The number of initial metro lines : {initial_line_number} | The number of result metro lines : {final_line_number} ")
         print(f"The number of initial metro stations : {len(initial_stations)} | The number of result metro stations : {len(final_stations)}")
+    
     def roulette_wheel_selection(self):
         """
         selection method , calculates probabilities for each chromosome based on their fitness values
@@ -296,10 +297,9 @@ class GeneticMetroPlanner:
 
                         if len(current_line) > self.number_initial_line_stations[line_name]: 
                             chromosome[line_name] = current_line[:-1]
-                        else:
-                            continue
-                    
-                    chromosome[line_name] = current_line[:-1]
+                        
+                    else:
+                        chromosome[line_name] = current_line[:-1]
                     
             
         if random.random() < self.mutation_line_rate:
