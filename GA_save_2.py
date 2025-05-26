@@ -1,6 +1,5 @@
 import numpy as np
 import random
-import pandas as pd
 from functions import haversine 
 
 
@@ -13,10 +12,7 @@ class GeneticMetroPlanner:
     w2 : tunable weight for cost
     w3 : tunable weight for the number of transfer 
     """
-    def __init__(self, all_stations_df : pd.DataFrame, 
-                 neighborhood_df : pd.DataFrame ,
-                 connectivity_dict : dict , 
-                 existing_lines_dict : dict,
+    def __init__(self, all_stations_df, connectivity_dict, existing_lines_dict,
                  mutation_rate = 0.1 , mutation_line_rate = 0.1 , 
                  mutation_new_line_protect_rate = 0.8,
                  generation_number = 20, child_number = 10,
@@ -24,7 +20,6 @@ class GeneticMetroPlanner:
                  w1 = 1 , w2 = 4 , w3 = 1):
 
         self.stations_df = all_stations_df
-        self.neighborhood_df = neighborhood_df
         self.connectivity_dict = connectivity_dict
         self.existing_lines_dict = existing_lines_dict
 
@@ -45,11 +40,6 @@ class GeneticMetroPlanner:
 
         self.line_count = 12
 
-        self.station_to_neighborhoods = self._create_station_neighborhood_mapping(all_stations_df)
-
-        self.neighborhood_contributions = {}
-
-
         self.candidate_station_ids = all_stations_df[
             all_stations_df['TYPE'] == 'candidate'
         ]['station_id'].tolist()
@@ -61,14 +51,6 @@ class GeneticMetroPlanner:
 
         self.best_final_result = None
         self.best_chromosome = None
-
-    def _create_station_neighborhood_mapping(self , all_stations_df):
-        mapping = {}
-
-        for _ , row in all_stations_df.iterrows():
-            neighborhoods = eval(row['arrived_neighborhoods']) if pd.notna(row['arrived_neighborhoods']) else set()
-            mapping[row['station_id']] = neighborhoods
-        return mapping
 
     def add_metro_stations(self , chromosome):
         new_chromosome = {}
@@ -114,32 +96,19 @@ class GeneticMetroPlanner:
             self.population.append(self.add_metro_stations(self.existing_lines_dict))
 
     def calculate_population_for_chromosome(self, chromosome):
+        """
+        calulate total accessing population for a chromosome (input)
+        """
+        total_population = 0
+        used_station_ids = set()
 
-        neighborhood_counts = {}  # {mahalle_id: kaç istasyon tarafından kapsanıyor}
-        neighborhood_populations = {}  # {mahalle_id: toplam nüfus}
-        
-        # 1. Tüm mahalleleri ve istasyon bağlantılarını say
         for line_stations in chromosome.values():
             for station_id in line_stations:
-                for neighborhood in self.station_to_neighborhoods.get(station_id, set()):
-                    neighborhood_counts[neighborhood] = neighborhood_counts.get(neighborhood, 0) + 1
-                    
-                    # Mahalle nüfusunu sadece bir kez ekle (ilk görüldüğünde)
-                    if neighborhood not in neighborhood_populations:
-                        pop = self.neighborhood_df[self.neighborhood_df['neighborhood_id'] == neighborhood]['population'].values
-                        neighborhood_populations[neighborhood] = pop[0] if len(pop) > 0 else 0
-
-        # 2. Nüfus katkısını hesapla
-        total_population = 0
-        for neighborhood, count in neighborhood_counts.items():
-            if count > 0 and neighborhood in neighborhood_populations:
-                # Örnek: 2 istasyon varsa nüfus/2, 3 istasyon varsa nüfus/3
-                total_population += neighborhood_populations[neighborhood] / count
-                
-        self.neighborhood_contributions = {
-            'counts': neighborhood_counts,
-            'populations': neighborhood_populations
-        }
+                if station_id not in used_station_ids:
+                    row = self.stations_df[self.stations_df['station_id'] == station_id]
+                    if not row.empty:
+                        total_population += row.iloc[0]['arrived_population']
+                        used_station_ids.add(station_id)
         
         return total_population
     

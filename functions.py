@@ -39,6 +39,23 @@ def calculate_arrived_population(lat1 , lon1 , population_df : pd.DataFrame , k 
 
     return result
 
+def calculate_arrived_neighoorhood_ids( lat1 , lon1 , 
+                                        population_df : pd.DataFrame , 
+                                        k = 1):
+
+    ids = set()
+    for index , row in population_df.iterrows():
+        lat2  = row['latitude']
+        lon2 = row['longitude']
+        
+        distance = haversine(lat1 , lon1 , lat2 , lon2)
+        
+        
+        if distance < k:
+            ids.add(row['neighborhood_code'])
+
+    return ids
+
 def create_grid(lat_min , lon_min , lat_max , lon_max , num_lat_grids = 30 , num_lon_grids = 30):
     """
     Input: lateral and longlitude (min and max) coordinates and grid number
@@ -123,6 +140,20 @@ def calculate_population_per_station(candidate_stations_df : pd.DataFrame , popu
         result.append(pop)
 
     candidate_stations_df['arrived_population'] = result
+
+    return candidate_stations_df
+
+def calculate_arrived_neighborhood_per_station(candidate_stations_df : pd.DataFrame,
+                                               population_df : pd.DataFrame ,
+                                               k = 1):
+    result = []
+    for _ , row in candidate_stations_df.iterrows():
+        lat = row['lat']
+        lon = row['lon']
+        neighbors = calculate_arrived_neighoorhood_ids(lat , lon , population_df , k=k)
+        result.append(neighbors)
+    
+    candidate_stations_df['arrived_neighborhoods'] = result
 
     return candidate_stations_df
 
