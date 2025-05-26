@@ -49,6 +49,9 @@ class GeneticMetroPlanner:
         self.population = []
         self.fitness_values = []
 
+        self.best_final_result = None
+        self.best_chromosome = None
+
     def add_metro_stations(self , chromosome):
         new_chromosome = {}
         avaliable_candidates = self.candidate_station_ids.copy()
@@ -209,6 +212,29 @@ class GeneticMetroPlanner:
         
         return best_chromosome, best_score
     
+    def details(self):
+        
+        initial_line_number = len(self.existing_lines_dict.keys())
+        final_line_number = len(self.best_chromosome.keys())
+
+        initial_stations = set()
+
+        for line_name , line in self.existing_lines_dict:
+            for station in line:
+                if station not in initial_stations:
+                    initial_stations.add(station)
+        
+        final_stations = set()
+        for line_name , line in self.best_chromosome:
+            for station in line:
+                if station not in final_stations:
+                    final_stations.add(station)        
+        
+        print(f"Population : {self.best_final_result['population']}")
+        print(f"Cost : {self.best_final_result['cost']}")
+        print(f"The number of transfer stations : {self.best_final_result['transfer']}")
+        print(f"The number of initial metro lines : {initial_line_number} | The number of result metro lines : {final_line_number} ")
+        print(f"The number of initial metro stations : {len(initial_stations)} | The number of result metro stations : {len(final_stations)}")
     def roulette_wheel_selection(self):
         """
         selection method , calculates probabilities for each chromosome based on their fitness values
@@ -337,5 +363,7 @@ class GeneticMetroPlanner:
     
             self.population = next_generation
             print(f"Generation {generation_number+1}: Best fitness = {max(self.fitness_values)}")
-        return self.best_result()
+        
+        self.best_chromosome , self.best_final_result = self.best_result()
+
     
