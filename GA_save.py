@@ -2,7 +2,6 @@ import numpy as np
 import random
 from functions import haversine 
 
-
 class GeneticMetroPlanner:
     """
     all_stations_df : DataFrame which includes all station ids , populations and coordinates
@@ -44,53 +43,55 @@ class GeneticMetroPlanner:
             all_stations_df['TYPE'] == 'candidate'
         ]['station_id'].tolist()
 
-        self.number_initial_line_stations = {line_name : len(line) for line_name , line in self.existing_lines_dict.items()}
-        
         self.population = []
         self.fitness_values = []
 
-    def add_metro_stations(self , chromosome):
-        new_chromosome = {}
-        avaliable_candidates = self.candidate_station_ids.copy()
-        random.shuffle(avaliable_candidates)
-
-        for line_name , line in chromosome.items():
+    def generate_chromosome(self):
+        """
+        generate a chromosome . for each metro line add 0-5 station at the end of metro line. 
+        """
+        chromosome = {}
+        available_candidates = self.candidate_station_ids.copy()
+        random.shuffle(available_candidates)
+    
+        for line_name, existing_stations in self.existing_lines_dict.items():
             added_stations = []
-            current_line = line.copy()
-
-            num_new_stations = random.randint(0 , self.max_per_station)
-
+            current_line = existing_stations.copy()
+    
+            num_new_stations = random.randint(0, self.max_per_station)
+    
             for _ in range(num_new_stations):
-
                 if not current_line:
                     break
-            
+    
                 last_station = current_line[-1]
-
-                neighbors = self.connectivity_dict.get(last_station , [])
-
+                neighbors = self.connectivity_dict.get(last_station, [])
+    
                 valid_extensions = [
-                    s for s in neighbors if s in avaliable_candidates and s not in current_line and s not in added_stations
+                    s for s in neighbors
+                    if s in available_candidates and s not in current_line and s not in added_stations
                 ]
-
+    
                 if valid_extensions:
                     new_station = random.choice(valid_extensions)
                     current_line.append(new_station)
                     added_stations.append(new_station)
-                
+                    available_candidates.remove(new_station)
                 else:
-                    break
-
-            new_chromosome[line_name] = current_line
-
-        return new_chromosome
+                    break 
     
+            chromosome[line_name] = current_line
+    
+        return chromosome 
+
+
     def generate_initial_population(self):
         """
         create intial population
         """
         for i in range(self.child_number):
-            self.population.append(self.add_metro_stations(self.existing_lines_dict))
+            self.population.append(self.generate_chromosome())                    
+
 
     def calculate_population_for_chromosome(self, chromosome):
         """
@@ -108,7 +109,7 @@ class GeneticMetroPlanner:
                         used_station_ids.add(station_id)
         
         return total_population
-    
+
     def calculate_cost_per_chromosome(self , chromosome):
         """
         calculate total cost for a chromosome (number of stations which are added)
@@ -124,7 +125,7 @@ class GeneticMetroPlanner:
                     total_cost += 1
         
         return total_cost
-
+        
     def calculate_transfer_number(self , chromosome , distance = 0.3):
         """
         calculates the number of tranfer station in a chromosome
@@ -160,7 +161,9 @@ class GeneticMetroPlanner:
                             transfer_pairs.add(frozenset([s1, s2]))
 
         return len(transfer_pairs)
-    
+            
+
+
     def fitness(self):
         """
         Calculate fitness by first normalizing population and cost separately,
@@ -196,19 +199,16 @@ class GeneticMetroPlanner:
             self.w1 * norm_pop + self.w2 * norm_cost + self.w3 * norm_transfer 
             for norm_pop, norm_cost , norm_transfer in zip(norm_pops, norm_costs , norm_transfer)
         ]
-    
+
     def best_result(self):
         """
         returns best solution
         """
         best_idx = self.fitness_values.index(max(self.fitness_values))
         best_chromosome = self.population[best_idx]
-        best_score = {'population' : self.calculate_population_for_chromosome(best_chromosome),
-                      'cost' : self.calculate_cost_per_chromosome(best_chromosome) , 
-                      'transfer' : self.calculate_transfer_number(best_chromosome)}
-        
+        best_score = self.fitness_values[best_idx]
         return best_chromosome, best_score
-    
+        
     def roulette_wheel_selection(self):
         """
         selection method , calculates probabilities for each chromosome based on their fitness values
@@ -224,7 +224,7 @@ class GeneticMetroPlanner:
             k = self.child_number)
 
         return selected_parents
-    
+
     def crossover(self , parent1 , parent2):
         """
         select metro lines from parents randomly. for example:
@@ -235,18 +235,18 @@ class GeneticMetroPlanner:
         all_line_names = set(parent1.keys()) | set(parent2.keys())
 
         for line_name in all_line_names:
-            if line_name in parent1 and line_name in parent2:
+            if line_name in parent1 and parent2:
                 if random.random() < 0.5:
                     child[line_name] = parent1[line_name].copy()
                 else:
                     child[line_name] = parent2[line_name].copy()
             elif line_name in parent1 and random.random() < self.mutation_new_line_protect_rate:
                 child[line_name] = parent1[line_name].copy()
-            elif line_name in parent2 and random.random() < self.mutation_new_line_protect_rate:
+            elif random.random() < self.mutation_new_line_protect_rate:
                 child[line_name] = parent2[line_name].copy()
             
         return child
-    
+
     def mutate(self, chromosome):
         """
         mutation adds new station at the end or remove last station randomly
@@ -265,16 +265,8 @@ class GeneticMetroPlanner:
                     if valid:
                         chromosome[line_name].append(random.choice(valid)) #add
     
-                elif mutation_type == "remove":
-                    if line_name in self.number_initial_line_stations.keys():
-
-                        if len(current_line) > self.number_initial_line_stations[line_name]: 
-                            chromosome[line_name] = current_line[:-1]
-                        else:
-                            continue
-                    
+                elif mutation_type == "remove" and len(current_line) > len(self.existing_lines_dict[line_name]): #check removing is valid
                     chromosome[line_name] = current_line[:-1]
-                    
             
         if random.random() < self.mutation_line_rate:
 
@@ -301,25 +293,15 @@ class GeneticMetroPlanner:
                         break
 
         return chromosome
-        
+
     def run(self):
 
         random.seed(self.random_seed)
-        print("Algorithm is started.")
-        #algorithm begins
-        for generation_number in range(self.generation_number):
-            
-            if generation_number == 0:
-                self.generate_initial_population()
-                print("Initial generation is created.")            
-            
-            else:
-                added_generation = []
-                #adding metro stations
-                for chromosome in self.population:
-                    added_generation.append(self.add_metro_stations(chromosome))
+        #initial generation
+        self.generate_initial_population()
 
-                self.population = added_generation
+        #algorithm begins
+        for generation in range(self.generation_number):
 
             #calculate fitnesses
             self.fitness()
@@ -336,6 +318,6 @@ class GeneticMetroPlanner:
                 next_generation.append(child)
     
             self.population = next_generation
-            print(f"Generation {generation_number+1}: Best fitness = {max(self.fitness_values)}")
+
         return self.best_result()
     
