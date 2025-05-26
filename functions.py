@@ -226,3 +226,48 @@ def visualize_chromosome(chromosome, stations_df):
 
     return m
 
+
+def visualize_chromosome_new(chromosome, stations_df):
+    m = folium.Map(location=[41.015137, 28.979530], zoom_start=11, tiles='CartoDB positron')
+
+    color_palette = [
+        '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2',
+        '#7f7f7f', '#bcbd22', '#17becf', '#393b79', '#637939', '#8c6d31',
+        '#843c39', '#7b4173', '#5254a3', '#9c9ede'
+    ]
+    
+    for i, (line, station_ids) in enumerate(chromosome.items()):
+        color = color_palette[i % len(color_palette)]
+        line_coords = []
+
+        for station_id in station_ids:
+            row = stations_df[stations_df['station_id'] == station_id]
+            if row.empty:
+                continue
+            lat = row.iloc[0]['lat']
+            lon = row.iloc[0]['lon']
+            line_coords.append((lat, lon))
+
+            # İstasyonları nokta olarak ekle
+            folium.CircleMarker(
+                location=(lat, lon),
+                radius=4,
+                color=color,
+                fill=True,
+                fill_color=color,
+                fill_opacity=0.8,
+                popup=f"{line}: {station_id}"
+            ).add_to(m)
+
+        # Hat çizgisi (polyline) ekle
+        if len(line_coords) >= 2:
+            folium.PolyLine(
+                locations=line_coords,
+                color=color,
+                weight=4,
+                opacity=0.8,
+                popup=f"Line {line}"
+            ).add_to(m)
+
+    return m
+

@@ -22,7 +22,7 @@ class GeneticMetroPlanner:
                  generation_number = 20, child_number = 10, selection_rate = 0.5 ,
                  max_per_station = 2 ,random_seed = 44 ,
                  normalization_array = [9218891 , 111 , 50],
-                 w1 = 1 , w2 = 4 , w3 = 1 ,
+                 w1 = 1 , w2 = 4 , w3 = 1 , alpha = 1,
                  verbose = False):
 
         self.stations_df = all_stations_df
@@ -45,6 +45,7 @@ class GeneticMetroPlanner:
         self.w1 = w1
         self.w2 = w2
         self.w3 = w3
+        self.alpha = alpha
 
         self.random_seed = random_seed
         self.verbose = verbose
@@ -233,13 +234,13 @@ class GeneticMetroPlanner:
 
         # Normalize population (higher is better)
         norm_pops = self._normalize(raw_populations,max_value=self.normalization_array[0] , inverse=False)  # Yüksek pop → yüksek değer
-        norm_costs = self._normalize(raw_costs,max_value=self.normalization_array[1],  inverse=True)       # Yüksek maliyet → düşük değer
+        norm_costs = self._normalize(raw_costs,max_value=self.normalization_array[1],  inverse=False)       # Yüksek maliyet → düşük değer
         norm_transfer = self._normalize(raw_transfer,max_value=self.normalization_array[2],  inverse=False)
         
         
         # Calculate final fitness: weighted sum of normalized values
         self.fitness_values = [
-            self.w1 * norm_pop + self.w2 * norm_cost + self.w3 * np.log(norm_transfer) 
+            self.alpha * (norm_pop / norm_cost) + self.w3 * np.log(norm_transfer) 
             for norm_pop, norm_cost , norm_transfer in zip(norm_pops, norm_costs , norm_transfer)
         ]
     
@@ -409,11 +410,13 @@ class GeneticMetroPlanner:
             
             self.temp_chromosome , self.temp_result = self.best_result()
 
+            self.history.append(self.temp_result)
+
             if self.verbose:
                 print(f"Generation {generation_number+1}: Best fitness = {max(self.fitness_values)}")
                 print(f"Population : {self.temp_result['population']}")
                 print(f"Cost : {self.temp_result['cost']}")
-                                
+
         self.best_chromosome , self.best_final_result = self.best_result()
 
     
