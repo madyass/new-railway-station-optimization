@@ -22,8 +22,7 @@ class GeneticMetroPlanner:
                  mutation_rate = 0.1 , mutation_line_rate = 0.1 , 
                  mutation_new_line_protect_rate = 0.8,
                  generation_number = 20, child_number = 10, selection_rate = 0.5 ,
-                 max_per_station = 2 ,max_cost = 100 , 
-                 random_seed = 44 ,
+                 max_per_station = 2 ,random_seed = 44 ,
                  normalization_array = [1000000 , 111 , 50],
                  w1 = 1 , w2 = 4 , w3 = 1 , alpha = 1,
                  verbose = False):
@@ -42,8 +41,6 @@ class GeneticMetroPlanner:
         self.selection_number = int(self.child_number / selection_rate)
 
         self.max_per_station = max_per_station
-        self.max_cost = max_cost
-        self.min_population_size = int(self.child_number * 0.2)
 
         self.normalization_array = normalization_array
 
@@ -65,16 +62,12 @@ class GeneticMetroPlanner:
         
         self.population = []
         self.fitness_values = []
-        self.cost_values = []
 
         self.temp_chromosome = None
         self.temp_result = None
         self.best_final_result = None
         self.best_chromosome = None
-        self.best_chromosome_all_time = None
-        self.best_result_all_time = None
-        
-        self.stop = False
+
         self.history = []
 
     def build_neighborhood_to_station_map(self):
@@ -335,20 +328,26 @@ class GeneticMetroPlanner:
         
         for line_name in chromosome:
             if random.random() < self.mutation_rate: #mutation is active
-                
+                mutation_type = random.choice(["add", "remove"]) #select which mutation
                 current_line = chromosome[line_name] 
                 used_stations = {s for line in chromosome.values() for s in line}
     
-               
-            
-                if line_name in self.number_initial_line_stations.keys():
+                if mutation_type == "add":
+                    last_station = current_line[-1]
+                    neighbors = self.connectivity_dict.get(last_station, [])
+                    valid = [s for s in neighbors if s in self.candidate_station_ids and s not in used_stations] #check adding is valid
+                    if valid:
+                        chromosome[line_name].append(random.choice(valid)) #add
+    
+                elif mutation_type == "remove":
+                    if line_name in self.number_initial_line_stations.keys():
 
-                    if len(current_line) > self.number_initial_line_stations[line_name]: 
+                        if len(current_line) > self.number_initial_line_stations[line_name]: 
+                            chromosome[line_name] = current_line[:-1]
+                        
+                    else:
                         chromosome[line_name] = current_line[:-1]
                     
-                else:
-                    chromosome[line_name] = current_line[:-1]
-                
             
         if random.random() < self.mutation_line_rate:
 
@@ -375,71 +374,34 @@ class GeneticMetroPlanner:
                         break
 
         return chromosome
-    
-    def eliminate(self):
-        """Eliminates chromosomes that exceed the maximum allowed cost."""
-        new_population = []
-        new_fitness_values = []
         
-        for chrom, fitness, cost in zip(self.population, self.fitness_values, self.cost_values):
-            if cost <= self.max_cost:
-                new_population.append(chrom)
-                new_fitness_values.append(fitness)
-        
-        # Update population and fitness values
-        self.population = new_population
-        self.fitness_values = new_fitness_values
-        
-        # If population becomes too small, repopulate
-        if len(self.population) < self.min_population_size:
-            print("Population becomes too small")
-            self.stop = True
-
     def run(self):
-
 
         random.seed(self.random_seed)
         print("Algorithm is started.")
-
-        self.generate_initial_population()
-
         #algorithm begins
         for generation_number in range(self.generation_number):
-
-            if self.stop:
-                return current_best , current_stats
-                
-            self.cost_values = [self.calculate_cost_per_chromosome(chrom) for chrom in self.population]
-
             
+            if generation_number == 0:
+                self.generate_initial_population()
+                print("Initial generation is created.")            
+            
+            else:
+                added_generation = []
+                #adding metro stations
+                for chromosome in self.population:
+                    added_generation.append(self.add_metro_stations(chromosome))
+
+                self.population = added_generation
+
             #calculate fitnesses
             self.fitness()
 
-            current_best, current_stats = self.best_result()
-            self.history.append(current_stats)
-
-            if self.best_result_all_time is None:
-                self.best_result_all_time = current_stats
-                self.best_chromosome_all_time = current_best
-
-            elif current_stats['fitness'] > self.best_result_all_time['fitness']:
-                self.best_chromosome_all_time = current_best
-                self.best_result_all_time = current_stats
-
-            if self.verbose:
-                print("--------------------")
-                print(f"Generation {generation_number+1}:")
-                print(f"Best Fitness: {current_stats['fitness']:.2f}")
-                print(f"Population Coverage: {current_stats['population']}")
-                print(f"Cost: {current_stats['cost']}")
-                print(f"Transfers: {current_stats['transfer']}")
-                print("--------------------\n")
             #selection 
             selected = self.roulette_wheel_selection()
 
             #creating new generation
             next_generation = []
-
             while len(next_generation) < self.child_number:
                 p1, p2 = random.sample(selected, 2)
                 child = self.crossover(p1, p2)
@@ -447,12 +409,16 @@ class GeneticMetroPlanner:
                 next_generation.append(child)
     
             self.population = next_generation
+            
+            self.temp_chromosome , self.temp_result = self.best_result()
 
-            self.eliminate()
+            self.history.append(self.temp_result)
 
-
+            if self.verbose:
+                print(f"Generation {generation_number+1}: Best fitness = {max(self.fitness_values)}")
+                print(f"Population : {self.temp_result['population']}")
+                print(f"Cost : {self.temp_result['cost']}")
 
         self.best_chromosome , self.best_final_result = self.best_result()
-        print("Optimization completed.")
 
     
