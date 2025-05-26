@@ -19,8 +19,9 @@ class GeneticMetroPlanner:
                  existing_lines_dict : dict,
                  mutation_rate = 0.1 , mutation_line_rate = 0.1 , 
                  mutation_new_line_protect_rate = 0.8,
-                 generation_number = 20, child_number = 10,
+                 generation_number = 20, child_number = 10, selection_rate = 0.5 ,
                  max_per_station = 2 ,random_seed = 44 ,
+                 normalization_array = [9218891 , 111 , 50],
                  w1 = 1 , w2 = 4 , w3 = 1):
 
         self.stations_df = all_stations_df
@@ -34,8 +35,11 @@ class GeneticMetroPlanner:
 
         self.generation_number = generation_number
         self.child_number = child_number
+        self.selection_number = int(self.child_number / selection_rate)
 
         self.max_per_station = max_per_station
+
+        self.normalization_array = normalization_array
 
         self.w1 = w1
         self.w2 = w2
@@ -148,10 +152,6 @@ class GeneticMetroPlanner:
                     used_station_ids.add(station_id)
 
         return total_population
-
-
-        
-        
     
     def calculate_cost_per_chromosome(self , chromosome):
         """
@@ -205,8 +205,8 @@ class GeneticMetroPlanner:
 
         return len(transfer_pairs)
     
-    def _normalize(self , values , inverse = False):
-        min_val, max_val = min(values), max(values)
+    def _normalize(self , values , max_value , min_value = 0  , inverse = False):
+        min_val, max_val = min_value , max_value
         if max_val == min_val:
             return [1.0 for _ in values]
         
@@ -226,14 +226,14 @@ class GeneticMetroPlanner:
         raw_transfer = [self.calculate_transfer_number(chrom) for chrom in self.population]
 
         # Normalize population (higher is better)
-        norm_pops = self._normalize(raw_populations, inverse=False)  # Yüksek pop → yüksek değer
-        norm_costs = self._normalize(raw_costs, inverse=False)       # Yüksek maliyet → düşük değer
-        norm_transfer = self._normalize(raw_transfer, inverse=False)
+        norm_pops = self._normalize(raw_populations,max_value=self.normalization_array[0] , inverse=False)  # Yüksek pop → yüksek değer
+        norm_costs = self._normalize(raw_costs,max_value=self.normalization_array[1],  inverse=True)       # Yüksek maliyet → düşük değer
+        norm_transfer = self._normalize(raw_transfer,max_value=self.normalization_array[2],  inverse=False)
         
         
         # Calculate final fitness: weighted sum of normalized values
         self.fitness_values = [
-            self.w1 * norm_pop - self.w2 * norm_cost + self.w3 * norm_transfer 
+            self.w1 * norm_pop + self.w2 * norm_cost + self.w3 * norm_transfer 
             for norm_pop, norm_cost , norm_transfer in zip(norm_pops, norm_costs , norm_transfer)
         ]
     
@@ -285,7 +285,7 @@ class GeneticMetroPlanner:
         selected_parents = random.choices(
             population = self.population,
             weights = selection_probs,
-            k = self.child_number)
+            k = self.selection_number)
 
         return selected_parents
     
