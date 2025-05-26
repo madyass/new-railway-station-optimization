@@ -2,7 +2,7 @@ import numpy as np
 import random
 import pandas as pd
 from functions import haversine 
-
+from collections import defaultdict
 
 class GeneticMetroPlanner:
     """
@@ -45,11 +45,6 @@ class GeneticMetroPlanner:
 
         self.line_count = 12
 
-        self.station_to_neighborhoods = self._create_station_neighborhood_mapping(all_stations_df)
-
-        self.neighborhood_contributions = {}
-
-
         self.candidate_station_ids = all_stations_df[
             all_stations_df['TYPE'] == 'candidate'
         ]['station_id'].tolist()
@@ -62,13 +57,15 @@ class GeneticMetroPlanner:
         self.best_final_result = None
         self.best_chromosome = None
 
-    def _create_station_neighborhood_mapping(self , all_stations_df):
-        mapping = {}
+    def build_neighborhood_to_station_map(self):
+        neighborhood_to_station = defaultdict(set)
 
-        for _ , row in all_stations_df.iterrows():
-            neighborhoods = eval(row['arrived_neighborhoods']) if pd.notna(row['arrived_neighborhoods']) else set()
-            mapping[row['station_id']] = neighborhoods
-        return mapping
+        for _, row in self.stations_df.iterrows():
+            station_id = row['station_id']
+            for neighborhood_id in row['arrived_neighborhoods']:
+                neighborhood_to_station[neighborhood_id].add(station_id)
+        
+        return neighborhood_to_station
 
     def add_metro_stations(self , chromosome):
         new_chromosome = {}
@@ -113,35 +110,48 @@ class GeneticMetroPlanner:
         for i in range(self.child_number):
             self.population.append(self.add_metro_stations(self.existing_lines_dict))
 
-    def calculate_population_for_chromosome(self, chromosome):
+    def calculate_arrived_station_for_neighborhood(self, chromosome):
+        all_stations = set(station for line in chromosome.values() for station in line)
+        neighborhood_to_station = self.build_neighborhood_to_station_map()
 
-        neighborhood_counts = {}  # {mahalle_id: kaç istasyon tarafından kapsanıyor}
-        neighborhood_populations = {}  # {mahalle_id: toplam nüfus}
-        
-        # 1. Tüm mahalleleri ve istasyon bağlantılarını say
+        neighborhood_counts = {}
+
+        for neighborhood_id in self.neighborhood_df['neighborhood_id']:
+            count = len(all_stations.intersection(neighborhood_to_station.get(neighborhood_id, set())))
+            if count > 0:
+                neighborhood_counts[neighborhood_id] = count
+
+        return neighborhood_counts
+
+    def calculate_population_for_chromosome(self, chromosome):
+        total_population = 0
+        used_station_ids = set()
+        neighborhood_counts = self.calculate_arrived_station_for_neighborhood(chromosome)
+
         for line_stations in chromosome.values():
             for station_id in line_stations:
-                for neighborhood in self.station_to_neighborhoods.get(station_id, set()):
-                    neighborhood_counts[neighborhood] = neighborhood_counts.get(neighborhood, 0) + 1
-                    
-                    # Mahalle nüfusunu sadece bir kez ekle (ilk görüldüğünde)
-                    if neighborhood not in neighborhood_populations:
-                        pop = self.neighborhood_df[self.neighborhood_df['neighborhood_id'] == neighborhood]['population'].values
-                        neighborhood_populations[neighborhood] = pop[0] if len(pop) > 0 else 0
+                if station_id not in used_station_ids:
+                    row = self.stations_df[self.stations_df['station_id'] == station_id]
+                    if not row.empty:
+                        station_row = row.iloc[0]
+                        neighbors = station_row['arrived_neighborhoods']
 
-        # 2. Nüfus katkısını hesapla
-        total_population = 0
-        for neighborhood, count in neighborhood_counts.items():
-            if count > 0 and neighborhood in neighborhood_populations:
-                # Örnek: 2 istasyon varsa nüfus/2, 3 istasyon varsa nüfus/3
-                total_population += neighborhood_populations[neighborhood] / count
-                
-        self.neighborhood_contributions = {
-            'counts': neighborhood_counts,
-            'populations': neighborhood_populations
-        }
-        
+                        for neighbor in neighbors:
+                            pop_row = self.neighborhood_df[self.neighborhood_df['neighborhood_id'] == neighbor]
+                            if not pop_row.empty:
+                                pop = pop_row.iloc[0]['population']
+
+                                if neighbor not in neighborhood_counts:
+                                    total_population += pop
+                                else:
+                                    total_population += pop / neighborhood_counts[neighbor]
+                    used_station_ids.add(station_id)
+
         return total_population
+
+
+        
+        
     
     def calculate_cost_per_chromosome(self , chromosome):
         """

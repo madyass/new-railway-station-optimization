@@ -52,7 +52,7 @@ def calculate_arrived_neighoorhood_ids( lat1 , lon1 ,
         
         
         if distance < k:
-            ids.add(row['neighborhood_code'])
+            ids.add(row['neighborhood_id'])
 
     return ids
 
