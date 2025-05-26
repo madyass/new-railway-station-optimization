@@ -22,7 +22,8 @@ class GeneticMetroPlanner:
                  generation_number = 20, child_number = 10, selection_rate = 0.5 ,
                  max_per_station = 2 ,random_seed = 44 ,
                  normalization_array = [9218891 , 111 , 50],
-                 w1 = 1 , w2 = 4 , w3 = 1 , alpha = 1):
+                 w1 = 1 , w2 = 4 , w3 = 1 ,
+                 verbose = False):
 
         self.stations_df = all_stations_df
         self.neighborhood_df = neighborhood_df
@@ -41,12 +42,12 @@ class GeneticMetroPlanner:
 
         self.normalization_array = normalization_array
 
-        self.alpha = alpha
         self.w1 = w1
         self.w2 = w2
         self.w3 = w3
 
         self.random_seed = random_seed
+        self.verbose = verbose
 
         self.line_count = 12
 
@@ -63,6 +64,8 @@ class GeneticMetroPlanner:
         self.temp_result = None
         self.best_final_result = None
         self.best_chromosome = None
+
+        self.history = []
 
     def build_neighborhood_to_station_map(self):
         neighborhood_to_station = defaultdict(set)
@@ -248,8 +251,9 @@ class GeneticMetroPlanner:
         best_chromosome = self.population[best_idx]
         best_score = {'population' : self.calculate_population_for_chromosome(best_chromosome),
                       'cost' : self.calculate_cost_per_chromosome(best_chromosome) , 
-                      'transfer' : self.calculate_transfer_number(best_chromosome)}
-        
+                      'transfer' : self.calculate_transfer_number(best_chromosome),
+                        'fitness' : max(self.fitness_values)
+        }
         return best_chromosome, best_score
     
     def details(self):
@@ -403,13 +407,13 @@ class GeneticMetroPlanner:
     
             self.population = next_generation
             
-            print(f"Generation {generation_number+1}: Best fitness = {max(self.fitness_values)}")
-            
             self.temp_chromosome , self.temp_result = self.best_result()
-            
-            print(f"Population : {self.temp_result['population']}")
-            print(f"Cost : {self.temp_result['cost']}")
-                
+
+            if self.verbose:
+                print(f"Generation {generation_number+1}: Best fitness = {max(self.fitness_values)}")
+                print(f"Population : {self.temp_result['population']}")
+                print(f"Cost : {self.temp_result['cost']}")
+                                
         self.best_chromosome , self.best_final_result = self.best_result()
 
     
