@@ -16,7 +16,7 @@ class GeneticMetroPlanner:
                  mutation_rate = 0.1 , mutation_line_rate = 0.1 , 
                  mutation_new_line_protect_rate = 0.8,
                  generation_number = 20, child_number = 10,
-                 new_station_number = 30 , max_per_station = 3 ,random_seed = 44 ,
+                 max_per_station = 3 ,random_seed = 44 ,
                  w1 = 1 , w2 = 4 , w3 = 1):
 
         self.stations_df = all_stations_df
@@ -26,10 +26,10 @@ class GeneticMetroPlanner:
         self.mutation_rate = mutation_rate
         self.mutation_line_rate = mutation_line_rate
         self.mutation_new_line_protect_rate = mutation_new_line_protect_rate
+
         self.generation_number = generation_number
         self.child_number = child_number
 
-        self.new_station_number = new_station_number
         self.max_per_station = max_per_station
 
         self.w1 = w1
@@ -164,6 +164,16 @@ class GeneticMetroPlanner:
 
         return len(transfer_pairs)
     
+    def _normalize(self , values , inverse = False):
+        min_val, max_val = min(values), max(values)
+        if max_val == min_val:
+            return [1.0 for _ in values]
+        
+        if inverse:  # Maliyet için ters normalizasyon
+            return [(max_val - v) / (max_val - min_val) for v in values]
+        else:
+            return [(v - min_val) / (max_val - min_val) for v in values]
+
     def fitness(self):
         """
         Calculate fitness by first normalizing population and cost separately,
@@ -175,28 +185,14 @@ class GeneticMetroPlanner:
         raw_transfer = [self.calculate_transfer_number(chrom) for chrom in self.population]
 
         # Normalize population (higher is better)
-        min_pop, max_pop = min(raw_populations), max(raw_populations)
-        if max_pop == min_pop:
-            norm_pops = [1.0 for _ in raw_populations]
-        else:
-            norm_pops = [(p - min_pop) / (max_pop - min_pop) for p in raw_populations]
-    
-        # Normalize cost (lower is better, so we invert the normalization)
-        min_cost, max_cost = min(raw_costs), max(raw_costs)
-        if max_cost == min_cost:
-            norm_costs = [1.0 for _ in raw_costs]
-        else:
-            norm_costs = [1 - (c - min_cost) / (max_cost - min_cost) for c in raw_costs]  # Inverted
-
-        min_transfer , max_transfer = min(raw_transfer) , max(raw_transfer)
-        if max_transfer == min_transfer:
-            norm_transfer = [1.0 for _ in raw_transfer]
-        else:
-            norm_transfer = [(t - min_transfer) / (max_transfer - min_transfer) for t in raw_transfer]    
+        norm_pops = self._normalize(raw_populations, inverse=False)  # Yüksek pop → yüksek değer
+        norm_costs = self._normalize(raw_costs, inverse=True)       # Yüksek maliyet → düşük değer
+        norm_transfer = self._normalize(raw_transfer, inverse=False)
+        
         
         # Calculate final fitness: weighted sum of normalized values
         self.fitness_values = [
-            self.w1 * norm_pop + self.w2 * norm_cost + self.w3 * norm_transfer 
+            self.w1 * norm_pop - self.w2 * norm_cost + self.w3 * norm_transfer 
             for norm_pop, norm_cost , norm_transfer in zip(norm_pops, norm_costs , norm_transfer)
         ]
     
