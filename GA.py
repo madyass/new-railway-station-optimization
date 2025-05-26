@@ -4,34 +4,37 @@ import pandas as pd
 from functions import haversine 
 from collections import defaultdict
 
-INITIAL_POP = 2000000
+INITIAL_POP = 2000000 #initial population to calculate increase of population
 
 class GeneticMetroPlanner:
     """
+    neighborhood_df : DataFrame which includes all neighborr ids , coordinates and candidate stations which could be arrive neighboors
     all_stations_df : DataFrame which includes all station ids , populations and coordinates
     connectivity_dict : Dictionary which shows which station could be connected whichs stations
     existing_lines_dict : Dictionary which is existing metro lines and stations
-    w1 : tunable weight for population
-    w2 : tunable weight for cost
+    normalization_array : max values for veriables of fitness function to normalize(min-max)
+    alpha : tunable weight for the population/cost
     w3 : tunable weight for the number of transfer 
     """
     def __init__(self, all_stations_df : pd.DataFrame, 
                  neighborhood_df : pd.DataFrame ,
                  connectivity_dict : dict , 
                  existing_lines_dict : dict,
+                 center_dict : dict , 
                  mutation_rate = 0.1 , mutation_line_rate = 0.1 , 
                  mutation_new_line_protect_rate = 0.8,
                  generation_number = 20, child_number = 10, selection_rate = 0.5 ,
                  max_per_station = 2 ,max_cost = 100 , 
                  random_seed = 44 ,
-                 normalization_array = [1000000 , 111 , 50],
-                 w1 = 1 , w2 = 4 , w3 = 1 , alpha = 1,
+                 normalization_array = [1000000 , 111 , 50 , 26],
+                 w1 = 1 , w2 = 4 , w3 = 1 , w4 = 1,
                  verbose = False):
 
         self.stations_df = all_stations_df
         self.neighborhood_df = neighborhood_df
         self.connectivity_dict = connectivity_dict
         self.existing_lines_dict = existing_lines_dict
+        self.center_dict = center_dict
 
         self.mutation_rate = mutation_rate
         self.mutation_line_rate = mutation_line_rate
@@ -50,7 +53,7 @@ class GeneticMetroPlanner:
         self.w1 = w1
         self.w2 = w2
         self.w3 = w3
-        self.alpha = alpha
+        self.w4 = w4
 
         self.random_seed = random_seed
         self.verbose = verbose
@@ -61,6 +64,7 @@ class GeneticMetroPlanner:
             all_stations_df['TYPE'] == 'candidate'
         ]['station_id'].tolist()
 
+        #inital metro lines and stations
         self.number_initial_line_stations = {line_name : len(line) for line_name , line in self.existing_lines_dict.items()}
         
         self.population = []
@@ -69,10 +73,11 @@ class GeneticMetroPlanner:
 
         self.temp_chromosome = None
         self.temp_result = None
+
         self.best_final_result = None
+        self.best_result_all_time = None
         self.best_chromosome = None
         self.best_chromosome_all_time = None
-        self.best_result_all_time = None
         
         self.stop = False
         self.history = []
@@ -231,6 +236,24 @@ class GeneticMetroPlanner:
         else:
             return [(v - min_val) / (max_val - min_val) for v in values]
 
+    def calculate_center_stations(self , chromosome):
+        
+        current_stations = set()
+        for line_name , line in chromosome.items():
+            for station in line:
+                if station not in current_stations:
+                    current_stations.add(station)
+        
+        result = 0
+
+        for center_id , station_ids in self.center_dict.items():
+            for station in station_ids:
+                if station in current_stations:
+                    result += 1
+                    break
+        
+        return result
+
     def fitness(self):
         """
         Calculate fitness by first normalizing population and cost separately,
@@ -240,17 +263,18 @@ class GeneticMetroPlanner:
         raw_populations = [self.calculate_population_for_chromosome(chrom) for chrom in self.population]
         raw_costs = [self.calculate_cost_per_chromosome(chrom) for chrom in self.population]
         raw_transfer = [self.calculate_transfer_number(chrom) for chrom in self.population]
+        raw_centers = [self.calculate_center_stations(chrom) for chrom in self.population]
 
         # Normalize population (higher is better)
-        norm_pops = self._normalize(raw_populations,max_value=self.normalization_array[0] , inverse=False)  # Yüksek pop → yüksek değer
-        norm_costs = self._normalize(raw_costs,max_value=self.normalization_array[1],  inverse=False)       # Yüksek maliyet → düşük değer
+        norm_pops = self._normalize(raw_populations,max_value=self.normalization_array[0] , inverse=False)  
+        norm_costs = self._normalize(raw_costs,max_value=self.normalization_array[1],  inverse=False)       
         norm_transfer = self._normalize(raw_transfer,max_value=self.normalization_array[2],  inverse=False)
-        
+        norm_centers = self._normalize(raw_centers,max_value=self.normalization_array[3],  inverse=False)
         
         # Calculate final fitness: weighted sum of normalized values
         self.fitness_values = [
-            self.alpha * (norm_pop / norm_cost) + self.w3 * np.log(norm_transfer) 
-            for norm_pop, norm_cost , norm_transfer in zip(norm_pops, norm_costs , norm_transfer)
+            ((norm_pop)**self.w1) * (1 / (norm_cost + 1e-6))**self.w2 + self.w3 * np.log(norm_transfer) + self.w4 * norm_center
+            for norm_pop, norm_cost , norm_transfer , norm_center in zip(norm_pops, norm_costs , norm_transfer , norm_centers)
         ]
     
     def best_result(self):
@@ -262,7 +286,8 @@ class GeneticMetroPlanner:
         best_score = {'population' : self.calculate_population_for_chromosome(best_chromosome),
                       'cost' : self.calculate_cost_per_chromosome(best_chromosome) , 
                       'transfer' : self.calculate_transfer_number(best_chromosome),
-                        'fitness' : max(self.fitness_values)
+                        'fitness' : max(self.fitness_values),
+                        'center' : self.calculate_center_stations(best_chromosome)
         }
         return best_chromosome, best_score
     
@@ -286,6 +311,7 @@ class GeneticMetroPlanner:
         
         print(f"Population : {self.best_final_result['population']}")
         print(f"Cost : {self.best_final_result['cost']}")
+        print(f"The number of Center : {self.best_final_result['center']}")
         print(f"The number of transfer stations : {self.best_final_result['transfer']}")
         print(f"The number of initial metro lines : {initial_line_number} | The number of result metro lines : {final_line_number} ")
         print(f"The number of initial metro stations : {len(initial_stations)} | The number of result metro stations : {len(final_stations)}")
@@ -390,7 +416,7 @@ class GeneticMetroPlanner:
         self.population = new_population
         self.fitness_values = new_fitness_values
         
-        # If population becomes too small, repopulate
+        # If population becomes too small, stop
         if len(self.population) < self.min_population_size:
             print("Population becomes too small")
             self.stop = True
@@ -407,6 +433,8 @@ class GeneticMetroPlanner:
         for generation_number in range(self.generation_number):
 
             if self.stop:
+                self.best_chromosome =  current_best
+                self.best_final_result = current_stats
                 return current_best , current_stats
                 
             self.cost_values = [self.calculate_cost_per_chromosome(chrom) for chrom in self.population]
@@ -433,6 +461,7 @@ class GeneticMetroPlanner:
                 print(f"Population Coverage: {current_stats['population']}")
                 print(f"Cost: {current_stats['cost']}")
                 print(f"Transfers: {current_stats['transfer']}")
+                print(f"Center : {current_stats['center']}")
                 print("--------------------\n")
             #selection 
             selected = self.roulette_wheel_selection()
@@ -449,8 +478,6 @@ class GeneticMetroPlanner:
             self.population = next_generation
 
             self.eliminate()
-
-
 
         self.best_chromosome , self.best_final_result = self.best_result()
         print("Optimization completed.")

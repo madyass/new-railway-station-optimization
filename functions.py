@@ -174,58 +174,22 @@ def calculate_connectivity_dict(all_stations_pop : pd.DataFrame , MIN_DIST_KM = 
 
     return connectivity_dict
 
+def calculate_stations_for_centers(coordinates_center , candidate_stations_df : pd.DataFrame ,
+                                   DIST_KM = 0.3):
+    result = {}
+    i = 1
+    for coordinate in coordinates_center:
+        lat1 , lon1 = coordinate[0] , coordinate[1]
+        temp_set = set()
+        for _ , row in candidate_stations_df.iterrows():
+            lat2 , lon2 = row['lat'] , row['lon']
 
-def visualize_chromosome(chromosome, stations_df):
-    m = folium.Map(location=[41.015137, 28.979530], zoom_start=11 , tiles='CartoDB positron')
-
-    color_palette = [
-    '#1f77b4',  # koyu mavi
-    '#ff7f0e',  # turuncu
-    '#2ca02c',  # koyu yeşil
-    '#d62728',  # kırmızı
-    '#9467bd',  # mor
-    '#8c564b',  # kahverengi
-    '#e377c2',  # pembe
-    '#7f7f7f',  # gri
-    '#bcbd22',  # zeytin
-    '#17becf',  # cam göbeği
-    '#393b79',  # lacivert
-    '#637939',  # zeytin yeşili
-    '#8c6d31',  # koyu altın
-    '#843c39',  # bordo
-    '#7b4173',  # koyu pembe
-    '#5254a3',  # orta mavi
-    '#9c9ede'   # açık mor ama yeterince koyu
-                ]
-    line_colors = {}
-
-    for i, (line, station_ids) in enumerate(chromosome.items()):
-        color = color_palette[i % len(color_palette)]
-        line_colors[line] = color
-        line_coords = []
-
-        for station_id in station_ids:
-            row = stations_df[stations_df['station_id'] == station_id]
-            if row.empty:
-                continue
-            lat = row.iloc[0]['lat']
-            lon = row.iloc[0]['lon']
-            line_coords.append((lat, lon))
-
-            folium.CircleMarker(
-                location=(lat, lon),
-                radius=4,
-                color=color,
-                fill=True,
-                fill_color=color,
-                fill_opacity=0.8,
-                popup=f"{line}: {station_id}"
-            ).add_to(m)
-
-        
-
-    return m
-
+            dist = haversine(lat1 , lon1 , lat2 , lon2)
+            if dist < DIST_KM:
+                temp_set.add(row['station_id'])
+        result[i] = temp_set
+        i+=1
+    return result
 
 def visualize_chromosome_new(chromosome, stations_df):
     m = folium.Map(location=[41.015137, 28.979530], zoom_start=11, tiles='CartoDB positron')
