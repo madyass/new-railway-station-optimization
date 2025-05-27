@@ -4,6 +4,27 @@ import pandas as pd
 from collections import defaultdict
 import folium
 from shapely.geometry import Point 
+import random
+
+color_dict = {
+            'M1A' : '#1f77b4',
+            'M1B': '#ff7f0e',
+            'M2': '#2ca02c',
+            'M3' : '#d62728',
+            'M5': '#9467bd',
+            'M6': '#8c564b',
+            'M7': '#e377c2',
+            'M8': '#7f7f7f',
+            'M9' :  '#bcbd22',
+            'M4' : '#17becf',
+            'M10' : '#2ca44c',
+            'M11' : '#393b79',
+            'M12' : '#e211c2' ,
+            'T1' : '#637939',
+            'T4' : '#8c6d31',
+            'T5': '#843c39'
+            }
+
 
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371 
@@ -102,10 +123,8 @@ def create_grid_for_polygon(polygon, n = 1000):
 
     index = 1
 
-    # 3. Bounding box sınırları
     minx, miny, maxx, maxy = polygon.bounds
 
-    # 4. Poligon içine n adet nokta üret
     while len(candidate_stations) < n:
         random_points = np.column_stack([
             np.random.uniform(minx, maxx, n),
@@ -201,7 +220,11 @@ def visualize_chromosome_new(chromosome, stations_df):
     ]
     
     for i, (line, station_ids) in enumerate(chromosome.items()):
-        color = color_palette[i % len(color_palette)]
+        if line in color_dict.keys():
+            color = color_dict[line]
+        else:
+            color = random.choice(color_palette)
+
         line_coords = []
 
         for station_id in station_ids:
@@ -212,7 +235,6 @@ def visualize_chromosome_new(chromosome, stations_df):
             lon = row.iloc[0]['lon']
             line_coords.append((lat, lon))
 
-            # İstasyonları nokta olarak ekle
             folium.CircleMarker(
                 location=(lat, lon),
                 radius=4,
@@ -223,7 +245,6 @@ def visualize_chromosome_new(chromosome, stations_df):
                 popup=f"{line}: {station_id}"
             ).add_to(m)
 
-        # Hat çizgisi (polyline) ekle
         if len(line_coords) >= 2:
             folium.PolyLine(
                 locations=line_coords,

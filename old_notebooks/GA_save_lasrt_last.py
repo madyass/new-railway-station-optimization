@@ -21,8 +21,7 @@ class GeneticMetroPlanner:
                  connectivity_dict : dict , 
                  existing_lines_dict : dict,
                  center_dict : dict , 
-                 mutation_rate = 0.1 , mutation_add_line_rate = 0.1 ,
-                 mutation_remove_line_rate = 0.1, 
+                 mutation_rate = 0.1 , mutation_line_rate = 0.1 , 
                  mutation_new_line_protect_rate = 0.8,
                  generation_number = 20, child_number = 10, selection_rate = 0.5 ,
                  max_per_station = 2 ,max_cost = 100 , 
@@ -38,9 +37,8 @@ class GeneticMetroPlanner:
         self.center_dict = center_dict
 
         self.mutation_rate = mutation_rate
-        self.mutation_add_line_rate = mutation_add_line_rate
+        self.mutation_line_rate = mutation_line_rate
         self.mutation_new_line_protect_rate = mutation_new_line_protect_rate
-        self.mutation_remove_line_rate = mutation_remove_line_rate
 
         self.generation_number = generation_number
         self.child_number = child_number
@@ -213,7 +211,7 @@ class GeneticMetroPlanner:
                 for s1 in stations1:
                     for s2 in stations2:
                         if s1 == s2:
-                            continue 
+                            continue  # Zaten aynı istasyon ID'si varsa eski yöntem işlesin diye
 
                         if s1 not in station_coords or s2 not in station_coords:
                             continue
@@ -223,6 +221,7 @@ class GeneticMetroPlanner:
 
                         dist = haversine(coord1["lat"], coord1["lon"], coord2["lat"], coord2["lon"])
                         if dist <= distance:
+                            # Transfer var. Aynı iki istasyonun sıralamasız çift olarak sadece bir kez sayılmasını sağla
                             transfer_pairs.add(frozenset([s1, s2]))
 
         return len(transfer_pairs)
@@ -232,7 +231,7 @@ class GeneticMetroPlanner:
         if max_val == min_val:
             return [1.0 for _ in values]
         
-        if inverse:  
+        if inverse:  # Maliyet için ters normalizasyon
             return [(max_val - v) / (max_val - min_val) for v in values]
         else:
             return [(v - min_val) / (max_val - min_val) for v in values]
@@ -354,82 +353,55 @@ class GeneticMetroPlanner:
                 child[line_name] = parent2[line_name].copy()
             
         return child
-        
+    
     def mutate(self, chromosome):
         """
-        Mutasyon işlemleri:
-        1. Hat sonuna istasyon ekleme/çıkarma
-        2. Yeni hat oluşturma
-        3. Yeni oluşturulmuş hatları silme (orijinal olmayanlar)
+        mutation adds new station at the end or remove last station randomly
         """
-
-        mutated = {k: v.copy() for k, v in chromosome.items()}
         
-      
-        for line_name in list(mutated.keys()): 
-            if random.random() < self.mutation_rate:
-                current_line = mutated[line_name]
-                used_stations = {s for line in mutated.values() for s in line}
+        for line_name in chromosome:
+            if random.random() < self.mutation_rate: #mutation is active
                 
-   
-                if random.random() < 0.5 and len(current_line) > 0:  
-                    if line_name in self.number_initial_line_stations:
-                        if len(current_line) > self.number_initial_line_stations[line_name]:
-                            mutated[line_name] = current_line[:-1]
-                    else:
-                        mutated[line_name] = current_line[:-1]
-                else:  
-                    last_station = current_line[-1] if len(current_line) > 0 else None
-                    if last_station:
-                        neighbors = self.connectivity_dict.get(last_station, [])
-                        valid = [s for s in neighbors 
-                                if s in self.candidate_station_ids 
-                                and s not in current_line
-                                and s not in used_stations]
-                        if valid:
-                            mutated[line_name].append(random.choice(valid))
-
-
-        if random.random() < self.mutation_add_line_rate:
-            candidate_line_name = random.choice(list(mutated.keys()))
-            candidate_station = random.choice(mutated[candidate_line_name])
+                current_line = chromosome[line_name] 
+                used_stations = {s for line in chromosome.values() for s in line}
+    
+               
             
+                if line_name in self.number_initial_line_stations.keys():
+
+                    if len(current_line) > self.number_initial_line_stations[line_name]: 
+                        chromosome[line_name] = current_line[:-1]
+                    
+                else:
+                    chromosome[line_name] = current_line[:-1]
+                
+            
+        if random.random() < self.mutation_line_rate:
+
+            candidate_line_name = random.choice(list(chromosome.keys()))
+            candidate_station = random.choice(chromosome[candidate_line_name])
+
             self.line_count += 1
             new_line_name = f"M{self.line_count}"
-            
-            neighbors = self.connectivity_dict.get(candidate_station, [])
+
+            neighbors = self.connectivity_dict.get(candidate_station , [])
             valid = [s for s in neighbors if s in self.candidate_station_ids]
-            
+
             if valid:
-                mutated[new_line_name] = [candidate_station]
+                chromosome[new_line_name] = [candidate_station]
+
                 for _ in range(random.randint(3,5)):
-                    last = mutated[new_line_name][-1]
-                    neighbors = self.connectivity_dict.get(last, [])
-                    valid = [s for s in neighbors 
-                            if s in self.candidate_station_ids 
-                            and s not in mutated[new_line_name]]
+                    last = chromosome[new_line_name][-1]
+                    neighbors = self.connectivity_dict.get(last , [])
+                    valid = [s for s in neighbors if s in self.candidate_station_ids and s not in chromosome[new_line_name]]
+
                     if valid:
-                        mutated[new_line_name].append(random.choice(valid))
+                        chromosome[new_line_name].append(random.choice(valid))
                     else:
                         break
 
-      
-        if random.random() < self.mutation_remove_line_rate: 
-
-            non_original_lines = [line_name for line_name in mutated.keys() 
-                                if line_name not in self.existing_lines_dict]
-            
-            if non_original_lines: 
-                line_to_remove = random.choice(non_original_lines)
-                
-            
-                if (line_to_remove not in self.existing_lines_dict and 
-                    len(mutated) > 1): 
-                    del mutated[line_to_remove]
-
-        return mutated
+        return chromosome
     
-
     def eliminate(self):
         """Eliminates chromosomes that exceed the maximum allowed cost."""
         new_population = []
