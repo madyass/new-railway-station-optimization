@@ -12,9 +12,15 @@ class GeneticMetroPlanner:
     all_stations_df : DataFrame which includes all station ids , populations and coordinates
     connectivity_dict : Dictionary which shows which station could be connected whichs stations
     existing_lines_dict : Dictionary which is existing metro lines and stations
+    center_dict : Dictionary which have centers coordinates. 
     normalization_array : max values for veriables of fitness function to normalize(min-max)
     alpha : tunable weight for the population/cost
-    w3 : tunable weight for the number of transfer 
+    w1,w2,w3,w4 : tunable weights for the population , cost , transfer , center (in order)
+    mutation rate : addin or removing a station prob
+    mutation_remove_line_rate : removing a line (not original line) prob
+    mutation_new_line_rate : adding a line prob 
+    mutation_new_line_protect_rate : in crossover part and gen selection part , how much algorithm should protect parent's new lines.
+    selection_rate = how much -rate- child should be selected in selection part. 
     """
     def __init__(self, all_stations_df : pd.DataFrame, 
                  neighborhood_df : pd.DataFrame ,
@@ -94,49 +100,6 @@ class GeneticMetroPlanner:
         
         return neighborhood_to_station
 
-    def add_metro_stations(self , chromosome):
-        new_chromosome = {}
-        avaliable_candidates = self.candidate_station_ids.copy()
-        random.shuffle(avaliable_candidates)
-
-        for line_name , line in chromosome.items():
-            added_stations = []
-            current_line = line.copy()
-
-            num_new_stations = random.randint(0 , self.max_per_station)
-
-            for _ in range(num_new_stations):
-
-                if not current_line:
-                    break
-            
-                last_station = current_line[-1]
-
-                neighbors = self.connectivity_dict.get(last_station , [])
-
-                valid_extensions = [
-                    s for s in neighbors if s in avaliable_candidates and s not in current_line and s not in added_stations
-                ]
-
-                if valid_extensions:
-                    new_station = random.choice(valid_extensions)
-                    current_line.append(new_station)
-                    added_stations.append(new_station)
-                
-                else:
-                    break
-
-            new_chromosome[line_name] = current_line
-
-        return new_chromosome
-    
-    def generate_initial_population(self):
-        """
-        create intial population
-        """
-        for i in range(self.child_number):
-            self.population.append(self.add_metro_stations(self.existing_lines_dict))
-
     def calculate_arrived_station_for_neighborhood(self, chromosome):
         all_stations = set(station for line in chromosome.values() for station in line)
         neighborhood_to_station = self.build_neighborhood_to_station_map()
@@ -149,6 +112,46 @@ class GeneticMetroPlanner:
                 neighborhood_counts[neighborhood_id] = count
 
         return neighborhood_counts
+
+    def generate_initial_population(self):
+        """
+        Creates initial population of metro network solutions by randomly extending existing lines.
+        Each chromosome starts with the existing network and adds random valid extensions.
+        """
+        self.population = []
+        
+        for _ in range(self.child_number):
+            # Create a copy of the existing lines as starting point
+            new_chromosome = {line: stations.copy() for line, stations in self.existing_lines_dict.items()}
+            
+            # For each line, randomly decide how many stations to add (0 to max_per_station)
+            for line_name in new_chromosome:
+                num_new_stations = random.randint(0, self.max_per_station)
+                
+                for _ in range(num_new_stations):
+                    if not new_chromosome[line_name]:  # Skip if line is empty
+                        continue
+                        
+                    last_station = new_chromosome[line_name][-1]
+                    neighbors = self.connectivity_dict.get(last_station, [])
+                    
+                    # Find valid candidate stations that:
+                    # 1. Are connected to last station
+                    # 2. Are candidate stations
+                    # 3. Aren't already in this line
+                    valid_extensions = [
+                        s for s in neighbors 
+                        if s in self.candidate_station_ids 
+                        and s not in new_chromosome[line_name]
+                    ]
+                    
+                    if valid_extensions:
+                        new_station = random.choice(valid_extensions)
+                        new_chromosome[line_name].append(new_station)
+                    else:
+                        break  # No valid extensions, stop trying to add
+
+            self.population.append(new_chromosome)
 
     def calculate_population_for_chromosome(self, chromosome , subtract_initial_pop = True):
         total_population = 0
@@ -356,12 +359,6 @@ class GeneticMetroPlanner:
         return child
         
     def mutate(self, chromosome):
-        """
-        Mutasyon işlemleri:
-        1. Hat sonuna istasyon ekleme/çıkarma
-        2. Yeni hat oluşturma
-        3. Yeni oluşturulmuş hatları silme (orijinal olmayanlar)
-        """
 
         mutated = {k: v.copy() for k, v in chromosome.items()}
         
