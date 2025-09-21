@@ -57,9 +57,9 @@ def order_stations(line_to_stations, station_id_to_coords):
 
 ordered = order_stations(line_to_stations, station_id_to_coords)
 
-with open("ordered_stations.json", "w", encoding="utf-8") as f:
+with open("/home/saydam/github_projects/metro_optimization/data/ordered_stations.json", "w", encoding="utf-8") as f:
     json.dump(ordered, f, ensure_ascii=False, indent=4)
 
-with open("station_id_to_coords.json", "w", encoding="utf-8") as f:
+with open("/home/saydam/github_projects/metro_optimization/data/station_id_to_coords.json", "w", encoding="utf-8") as f:
     json.dump(station_id_to_coords, f, ensure_ascii=False, indent=4)
 
